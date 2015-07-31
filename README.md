@@ -1,2 +1,2 @@
 # speedtest
-Hello world!
+This project is an attempt of creating a distributed speedtest!
