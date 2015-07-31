@@ -1,0 +1,7 @@
+1. https://www.rabbitmq.com/web-stomp.html (webstomp) websocket interaction with rabbitmq
+1.1. http://www.rabbitmq.com/blog/2012/05/14/introducing-rabbitmq-web-stomp/
+2. Upgrade erlang   https://github.com/yrashk/kerl
+http://stackoverflow.com/questions/27215936/how-to-upgrade-the-erlang-version-on-ubuntu-r14b04-to-latest-stable-version
+
+Install rabbitmq-plugins 
+sh /usr/lib/rabbitmq/bin/rabbitmq-plugins enable rabbitmq_web_stomp
