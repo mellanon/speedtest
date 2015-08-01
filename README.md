@@ -1,5 +1,3 @@
-# speedtest
-
 Enable SSH
 $ sudo mv /etc/init/ssh.conf.back /etc/init/ssh.conf
 $ sudo start ssh
@@ -68,8 +66,16 @@ filter dhcp_ack { match("DHCPACK" value("MESSAGE")); };
 destination rabbitmq { program("/usr/bin/python -u /opt/speedtest/pushMessage.py" template("${DATE} ${MSG}\n") flush_lines(1) flags(no_multi_line) flush_timeout(1000)); };
 log { source(s_src); filter(dhcp_ack); destination(rabbitmq); };
 
+init scripts for the python scripts
 
+timezone + ntp time synch
+sudo dpkg-reconfigure tzdata
+sudo apt-get install ntp
 
+syslog in pushMessage.py
 
+configuration file with device ID
 
-	
+JSON messages to msg queue
+
+Error message on ping timeout: "Restart test by reconnecting the ethernet cable to the speed test device."
