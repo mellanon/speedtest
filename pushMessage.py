@@ -2,6 +2,26 @@
 
 import pika
 import sys
+import datetime
+from datetime import datetime
+import logging
+import logging.handlers
+
+syslog = logging.getLogger('Syslog')
+syslog.setLevel(logging.DEBUG)
+
+handler = logging.handlers.SysLogHandler(address = '/dev/log')
+
+syslog.addHandler(handler)
+
+def syslogger(message, severity):
+    logtime = str(datetime.now())
+    if severity == "info":
+        syslog.info(logtime +': ' + message)
+    elif severity == "err":
+        syslog.err(logtime + ': ' + message)
+    elif severity == "debug":
+        syslog.debug(logtime + ': ' + message)
 
 
 try:
@@ -22,7 +42,5 @@ try:
 
 	    connection.close()
 except Exception, e:
-    f = open('/tmp/error.txt','ab')
-    f.write(e)
-    f.close()
+    syslogger('Speed test syslog receiver was terminated due to an unhandled exception:'+str(e),'err')
     exit(0)

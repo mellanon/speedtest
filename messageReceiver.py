@@ -16,6 +16,11 @@ handler = logging.handlers.SysLogHandler(address = '/dev/log')
 
 syslog.addHandler(handler)
 
+connection = pika.BlockingConnection(pika.ConnectionParameters(
+               'localhost'))
+channel = connection.channel()
+channel.queue_declare(queue='sendQueue')
+
 def syslogger(message, severity):
     logtime = str(datetime.now())
     if severity == "info":
@@ -27,25 +32,36 @@ def syslogger(message, severity):
     
 def waitForPing( ip ):
     waiting =True
+    counter =0
+    logMsg = 'Testing Internet Connectivity.'
+    syslogger(logMsg, 'info')
+    channel.basic_publish(exchange='',routing_key="sendQueue",body=logMsg)
     while waiting:
-        counter =0
-	t = os.system('ping -c 1 {}'.format(ip)+'> /dev/null 2>&1')
+	t = os.system('ping -c 1 -W 1 {}'.format(ip)+'> /dev/null 2>&1')
         if not t:
             waiting=False
-	    syslogger('Ping reply from '+ip, 'info')
+	    logMsg = 'Ping reply from '+ip
+            channel.basic_publish(exchange='',routing_key="sendQueue",body=logMsg)
+	    syslogger(logMsg, 'info')
             return True
         else:
             counter +=1
-            if counter == 10000: # this will prevent an never ending loop, set to the number of tries you think it will require
+	    if (counter%30 == 0):
+                logMsg = 'Trying to connect to Internet for '+str(counter)+' seconds'
+	        syslogger(logMsg, 'info')
+	        channel.basic_publish(exchange='',routing_key="sendQueue",body=logMsg)
+            if counter == 300: # this will prevent an never ending loop, set to the number of tries you think it will require
                 waiting = False
-		syslog.info(str(datetime.now())+': Ping timeout '+ip)
+		logMsg = 'Ping timeout after trying for '+str(counter)+' seconds!\nRestart the speed test by reconnecting the ethernet cable to the speed test device.'
+		syslogger(logMsg, 'info')
+		channel.basic_publish(exchange='',routing_key="sendQueue",body=logMsg)
                 return False
-        time.sleep(1)
 
 def speedtest():
     cmd = ['/usr/bin/python', '-u', '/opt/speedtest/speedtest_cli.py']
-    syslog.info(str(datetime.now())+': Initiating speed test')
-    channel.queue_declare(queue='sendQueue')
+    
+    logMsg = 'Initiating Speed Test'
+    syslogger(logMsg, 'info')
 
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     for line in iter(p.stdout.readline,''):
@@ -57,17 +73,20 @@ def speedtest():
     return not p.returncode
 
 def callback(ch, method, properties, body):
-    syslog.info(str(datetime.now())+': Speed device has been connected via ethernet. Initiating speed test process...')
+    logMsg = 'Speed device has been plugged in. Initiating speed test process...'
+    syslogger(logMsg, 'info')
+    channel.basic_publish(exchange='',routing_key="sendQueue",body=logMsg)
     print " [x] Received %r" % (body,)
     #Retry if unsuccessful
     if waitForPing("8.8.8.8") and speedtest():
-	syslog.info(str(datetime.now())+': Speed test successful')
+	logMsg = 'Speed Test Completed!'
+	channel.basic_publish(exchange='',routing_key="sendQueue",body=logMsg)
+	syslogger(logMsg, 'info')
     else:
-	syslogger('Speed test unsuccessful!', 'err')
+        logMsg = 'Speed Test Unsuccessful!'
+        channel.basic_publish(exchange='',routing_key="sendQueue",body=logMsg)
+	syslogger(logMsg, 'err')
 
-connection = pika.BlockingConnection(pika.ConnectionParameters(
-               'localhost'))
-channel = connection.channel()
 
 channel.queue_declare(queue='dhcpack')
     
