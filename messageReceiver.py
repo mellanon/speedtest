@@ -8,6 +8,14 @@ import logging
 import logging.handlers
 import datetime
 from datetime import datetime
+import yaml
+
+with open('config.yaml', 'r') as f:
+    config = yaml.load(f)
+
+deviceId = config["speedtest"]["deviceId"]
+print deviceId
+
 
 syslog = logging.getLogger('Syslog')
 syslog.setLevel(logging.DEBUG)
