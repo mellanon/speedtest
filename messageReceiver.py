@@ -85,6 +85,7 @@ def speedtest():
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     for line in iter(p.stdout.readline,''):
         sys.stdout.flush()
+        remoteLogger(line)
         channel.basic_publish(exchange='',
                       routing_key="sendQueue",
                       body=line)
@@ -95,6 +96,7 @@ def remoteLogger(msg):
     headers = {'Content-type': 'application/x-www-form-urlencoded ', 'Accept': 'text/plain'}
     json_data = json.dumps({'deviceId':deviceId, 'sessionId':str(sessionId), 'timeCreated':str(datetime.now()), 'msg':msg}) 
     payload = {'speedtest':json_data}
+    r = requests.post(uri, data=payload, headers=headers)
 
 def callback(ch, method, properties, body):
     global sessionId
