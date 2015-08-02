@@ -13,7 +13,7 @@ import uuid
 import json
 import requests
 
-with open('config.yaml', 'r') as f:
+with open('/opt/speedtest/config.yaml', 'r') as f:
     config = yaml.load(f)
 
 #Global variables
@@ -106,7 +106,7 @@ def callback(ch, method, properties, body):
     remoteLogger(logMsg)
 
     channel.basic_publish(exchange='',routing_key="sendQueue",body=logMsg)
-    print " [x] Received %r" % (body,)
+    #print " [x] Received %r" % (body,)
     #Retry if unsuccessful
     if waitForPing("8.8.8.8") and speedtest():
 	logMsg = 'Speed Test Completed!'
@@ -126,6 +126,6 @@ channel.basic_consume(callback,
                       no_ack=True)
 
 syslogger('Started speed test message receiver', 'info')
-print ' [*] Waiting for messages. To exit press CTRL+C'
+#print ' [*] Waiting for messages. To exit press CTRL+C'
 channel.start_consuming()
 
