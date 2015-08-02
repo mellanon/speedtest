@@ -30,14 +30,15 @@ try:
         message = sys.stdin.readline().rstrip()
 
 	if len(message) > 1:
+            credentials = pika.PlainCredentials('speedtest', '1nfield')
 	    connection = pika.BlockingConnection(pika.ConnectionParameters(
-               'localhost'))
+               'localhost', 5672, '/', credentials))
 	    channel = connection.channel()
 
-	    channel.queue_declare(queue='dhcpack')
+	    channel.queue_declare(queue='linkup')
 
 	    channel.basic_publish(exchange='',
-                      routing_key='dhcpack',
+                      routing_key='linkup',
                       body=message)
 
 	    connection.close()

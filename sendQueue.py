@@ -2,10 +2,10 @@
 
 import pika
 
+credentials = pika.PlainCredentials('speedtest', '1nfield')
 connection = pika.BlockingConnection(pika.ConnectionParameters(
-        host='localhost'))
+               'localhost', 5672, '/', credentials))
 channel = connection.channel()
-
 channel.queue_declare(queue='sendQueue')
 
 print ' [*] Waiting for messages. To exit press CTRL+C'
