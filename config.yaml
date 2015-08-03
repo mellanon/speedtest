@@ -4,4 +4,4 @@ device_info:
 message_server:
     username: 'speedtest'
     password: '1nfield'
-    uri: 'http://192.168.2.98/speedtest/postResult.json'
+    uri: 'http://192.168.56.222/speedtest/postResult.json'
