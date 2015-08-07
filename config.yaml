@@ -1,0 +1,7 @@
+device_info:
+    deviceId: 1
+    deviceType: 'RaspberryPi'
+message_server:
+    username: 'speedtest'
+    password: '1nfield'
+    uri: 'http://192.168.56.222/speedtest/postResult.json'

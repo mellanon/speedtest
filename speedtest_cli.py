@@ -88,7 +88,10 @@ except ImportError:
     def print_(*args, **kwargs):
         """The new-style print function taken from
         https://pypi.python.org/pypi/six/
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/release1.0
         """
         fp = kwargs.pop("file", sys.stdout)
         if fp is None:
@@ -142,7 +145,10 @@ else:
 class SpeedtestCliServerListError(Exception):
     """Internal Exception class used to indicate to move on to the next
     URL for retrieving speedtest.net server details
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/release1.0
     """
 
 
@@ -176,9 +182,13 @@ def distance(origin, destination):
 
 def build_request(url, data=None, headers={}):
     """Build a urllib2 request object
+<<<<<<< HEAD
 
     This function automatically adds a User-Agent header to all requests
 
+=======
+    This function automatically adds a User-Agent header to all requests
+>>>>>>> origin/release1.0
     """
 
     headers['User-Agent'] = user_agent
@@ -188,7 +198,10 @@ def build_request(url, data=None, headers={}):
 def catch_request(request):
     """Helper function to catch common exceptions encountered when
     establishing a connection with a HTTP/HTTPS request
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/release1.0
     """
 
     try:
@@ -327,7 +340,10 @@ def uploadSpeed(url, sizes, quiet=False):
 def getAttributesByTagName(dom, tagName):
     """Retrieve an attribute from an XML document and return it in a
     consistent format
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/release1.0
     Only used with xml.dom.minidom, which is likely only to be used
     with python versions older than 2.5
     """
