@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 <<<<<<< HEAD
+<<<<<<< HEAD
 import pika
 import sys
 =======
+=======
+>>>>>>> origin/raspberrypi
 
 import pika
 import sys
@@ -10,6 +13,16 @@ import datetime
 from datetime import datetime
 import logging
 import logging.handlers
+<<<<<<< HEAD
+=======
+import yaml
+
+with open('/opt/speedtest/config.yaml', 'r') as f:
+    config = yaml.load(f)
+
+username = config["message_server"]["username"]
+password = config["message_server"]["password"]
+>>>>>>> origin/raspberrypi
 
 syslog = logging.getLogger('Syslog')
 syslog.setLevel(logging.DEBUG)
@@ -26,7 +39,10 @@ def syslogger(message, severity):
         syslog.err(logtime + ': ' + message)
     elif severity == "debug":
         syslog.debug(logtime + ': ' + message)
+<<<<<<< HEAD
 >>>>>>> origin/release1.0
+=======
+>>>>>>> origin/raspberrypi
 
 
 try:
@@ -35,6 +51,7 @@ try:
         message = sys.stdin.readline().rstrip()
 
 	if len(message) > 1:
+<<<<<<< HEAD
 <<<<<<< HEAD
 	    connection = pika.BlockingConnection(pika.ConnectionParameters(
                'localhost'))
@@ -46,6 +63,9 @@ try:
                       routing_key='dhcpack',
 =======
             credentials = pika.PlainCredentials('speedtest', '1nfield')
+=======
+            credentials = pika.PlainCredentials(username, password)
+>>>>>>> origin/raspberrypi
 	    connection = pika.BlockingConnection(pika.ConnectionParameters(
                'localhost', 5672, '/', credentials))
 	    channel = connection.channel()
@@ -54,11 +74,15 @@ try:
 
 	    channel.basic_publish(exchange='',
                       routing_key='linkup',
+<<<<<<< HEAD
 >>>>>>> origin/release1.0
+=======
+>>>>>>> origin/raspberrypi
                       body=message)
 
 	    connection.close()
 except Exception, e:
+<<<<<<< HEAD
 <<<<<<< HEAD
     f = open('/tmp/error.txt','ab')
     f.write(e)
@@ -66,4 +90,7 @@ except Exception, e:
 =======
     syslogger('Speed test syslog receiver was terminated due to an unhandled exception:'+str(e),'err')
 >>>>>>> origin/release1.0
+=======
+    syslogger('Speed test syslog receiver was terminated due to an unhandled exception:'+str(e),'err')
+>>>>>>> origin/raspberrypi
     exit(0)

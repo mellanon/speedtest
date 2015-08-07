@@ -3,6 +3,7 @@ import pika
 import subprocess
 import sys 
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 def speedtest():
     cmd = ['/usr/bin/python', '-u', '/home/netadmin/speedtest/speedtest_cli.py']
@@ -10,6 +11,8 @@ def speedtest():
    
     channel.queue_declare(queue='speedTestSendQueue', durable=True)
 =======
+=======
+>>>>>>> origin/raspberrypi
 import os
 import time
 import logging
@@ -28,6 +31,12 @@ with open('/opt/speedtest/config.yaml', 'r') as f:
 deviceId = config["device_info"]["deviceId"]
 deviceType = config["device_info"]["deviceType"]
 uri = config["message_server"]["uri"]
+<<<<<<< HEAD
+=======
+username = config["message_server"]["username"]
+password = config["message_server"]["password"]
+
+>>>>>>> origin/raspberrypi
 sessionId = ""
 
 #Initialise syslogger
@@ -37,7 +46,11 @@ handler = logging.handlers.SysLogHandler(address = '/dev/log')
 syslog.addHandler(handler)
 
 #Initialise rabbitmq connection
+<<<<<<< HEAD
 credentials = pika.PlainCredentials('speedtest', '1nfield')
+=======
+credentials = pika.PlainCredentials(username, password)
+>>>>>>> origin/raspberrypi
 connection = pika.BlockingConnection(pika.ConnectionParameters(
                'localhost', 5672, '/', credentials))
 channel = connection.channel()
@@ -89,11 +102,15 @@ def speedtest():
     logMsg = 'Initiating Speed Test'
     syslogger(logMsg, 'info')
     remoteLogger(logMsg)
+<<<<<<< HEAD
 >>>>>>> origin/release1.0
+=======
+>>>>>>> origin/raspberrypi
 
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     for line in iter(p.stdout.readline,''):
         sys.stdout.flush()
+<<<<<<< HEAD
 <<<<<<< HEAD
         channel.basic_publish(exchange='',
                       routing_key="speedTestSendQueue",
@@ -128,6 +145,8 @@ channel.start_consuming()
 
 
 =======
+=======
+>>>>>>> origin/raspberrypi
         remoteLogger(line)
         channel.basic_publish(exchange='',
                       routing_key="sendQueue",
@@ -172,4 +191,7 @@ syslogger('Started speed test message receiver', 'info')
 #print ' [*] Waiting for messages. To exit press CTRL+C'
 channel.start_consuming()
 
+<<<<<<< HEAD
 >>>>>>> origin/release1.0
+=======
+>>>>>>> origin/raspberrypi

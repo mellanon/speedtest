@@ -1,8 +1,20 @@
 #!/usr/bin/env python
 
 import pika
+<<<<<<< HEAD
 
 credentials = pika.PlainCredentials('speedtest', '1nfield')
+=======
+import yaml
+
+with open('/opt/speedtest/config.yaml', 'r') as f:
+    config = yaml.load(f)
+
+username = config["message_server"]["username"]
+password = config["message_server"]["password"]
+
+credentials = pika.PlainCredentials(username, password)
+>>>>>>> origin/raspberrypi
 connection = pika.BlockingConnection(pika.ConnectionParameters(
                'localhost', 5672, '/', credentials))
 channel = connection.channel()
