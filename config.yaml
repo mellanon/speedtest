@@ -13,3 +13,4 @@ configuration-server:
     uri: 'http://scottf.ddns.net/speedtest/postResult.json'
 general:
     ping-timeout: 180 #seconds
+    remote-retry: 5 #10 seconds sleep = 60 seconds retry

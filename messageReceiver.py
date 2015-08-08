@@ -4,6 +4,7 @@ import pika
 import subprocess
 import sys 
 import os
+import signal
 import time
 import logging
 import logging.handlers
@@ -36,7 +37,7 @@ syslogQueue = config["rabbit-mq"]["syslog-queue"]
 
 ##General configuration
 pingTimeOut = config["general"]["ping-timeout"]
-
+remoteLoggerRetry = config["general"]["remote-retry"]
 sessionId = ""
 
 #Initialise syslogger
@@ -64,8 +65,8 @@ def syslogger(message, severity):
     	    syslog.debug(logtime + ': ' + message)    
         return True
     except Exception as e:
-        if not processMessage("Unable to log message to syslog: "+str(e),severity='critical',syslog=False): return False
-        return False
+        processMessage("Unable to log message to syslog: "+str(e),severity='critical',syslog=False)
+        raise 
 
 def rabbitmqLog (message, queue, **kwargs):
     if kwargs.has_key('exchange'):
@@ -74,10 +75,9 @@ def rabbitmqLog (message, queue, **kwargs):
         exchange = ''
     try:
         channel.basic_publish(exchange=exchange,routing_key=queue,body=message)
-        return True
     except Exception as e:
-        if not processMessage("Unable to push message to RabbitMQ queue: "+str(e),severity='critical', rabbitlog=False): return False
-        return False
+        processMessage("Unable to push message to RabbitMQ queue: "+str(e),severity='critical', rabbitlog=False)
+        raise
    
     
 
@@ -112,7 +112,7 @@ def processMessage(message, **kwargs):
 
     #Log to syslog?
     if syslog:
-        logError = syslogger(message, severity)
+        syslogger(message, severity)
 
     #Log to rabbitMQ queue?
     if rabbitlog:
@@ -121,33 +121,29 @@ def processMessage(message, **kwargs):
     #Send log to remote log server
     if remotelog:
         logError = remoteLogger(message)
-    
-    if logError:
-        return False
-    return True
 
 #Make sure that the speed test device can reach Internet
 def waitForPing( ip ):
     waiting =True
     counter =0
     logMsg = 'Testing Internet Connectivity.'
-    if not processMessage(logMsg): return False
+    processMessage(logMsg)
     while waiting:
 	t = os.system('ping -c 1 -W 1 {}'.format(ip)+'> /dev/null 2>&1')
         if not t:
             waiting=False
 	    logMsg = 'Ping reply from '+ip
-            if not processMessage(logMsg): return False
+            processMessage(logMsg)
             return True
         else:
             counter +=1
 	    if (counter%30 == 0):
                 logMsg = 'Trying to connect to Internet for '+str(counter)+' seconds'
- 	        if not processMessage(logMsg): return False
+ 	        processMessage(logMsg)
             if counter == pingTimeOut: # this will prevent an never ending loop, set to the number of tries you think it will require
                 waiting = False
 		logMsg = 'Ping timeout after trying for '+str(counter)+' seconds!\nRestart the speed test by reconnecting the ethernet cable to the speed test device.'
-                if not processMessage(logMsg): return False
+                processMessage(logMsg)
                 return False
 
 def speedtest():
@@ -158,18 +154,20 @@ def speedtest():
     
     try:
         logMsg = 'Initiating Speed Test'
-        if not processMessage(logMsg): return False
+        processMessage(logMsg)
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, preexec_fn=os.setsid)
+        #p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
 
         for line in iter(p.stdout.readline,''):
             sys.stdout.flush()
-	    if not processMessage(line): 
-                os.killpg(p.pid, signal.SIGTERM)
-                return False
+	    processMessage(line)
+
         p.wait()
         return not p.returncode
     except Exception as e:
-        if not processMessage("Unable to initiate Speed Test through external python script: "+str(e)): return False
+        processMessage("Unable to complete Speed Test through external python script: "+str(cmd),remotelog=False, rabbitlog=False)
+        os.killpg(p.pid, signal.SIGTERM)
+        raise
 
 #Implement function to validate that dns can be resolved
 
@@ -186,57 +184,57 @@ def remoteLogger(msg):
         try:
             tries += 1
             r = requests.post(uri, data=payload, headers=headers)
-            tryAgain = False #Successful
-            print "remoteLogger successful!\n"
+            tryAgain = False
         except requests.exceptions.Timeout:
-            if not processMessage("Connection to server: "+uri+" timed out. Tried "+str(tries)+" times.", remotelog=False): return False
-            if tries > 2:
+            processMessage("Connection to server: "+uri+" timed out. Tried "+str(tries)+" times.", remotelog=False)
+            if tries > remoteLoggerRetry:
                 tryAgain = False
         except requests.exceptions.TooManyRedirects:
-            if not processMessage("Too many redirects when trying to connect to: "+uri+". Tried "+str(tries)+" times.", remotelog=False): return False
-            if tries > 2:
+            processMessage("Too many redirects when trying to connect to: "+uri+". Tried "+str(tries)+" times.", remotelog=False)
+            if tries > remoteLoggerRetry:
                 tryAgain = False
         except requests.exceptions.RequestException as e:
             # catastrophic error. bail.
-            processMessage("HTTP Request Exception: "+str(e)+" when trying to connect to "+uri+". Tried "+str(tries)+" times.", remotelog=False, severity='critical')
-            if tries > 2:
+            processMessage("HTTP Request Exception. Trying to connect to "+uri+". Tried "+str(tries)+" times.", remotelog=False, severity='critical')
+            if tries > remoteLoggerRetry:
                tryAgain = False
+               raise
         #wait 5 seconds
-        time.sleep(5)
-
-    if tries > 2:
-        return False
-    else:
-        return True
-
+        time.sleep(10)
 
 def callback(ch, method, properties, body):
     global sessionId
     try:
         sessionId = uuid.uuid1()
         logMsg = 'Speed device has been plugged in. Initiating speed test process...' #Start tag to identify session start
-        if not processMessage(logMsg): 
-            raise Exception.OSError.ConnectionError.ConnectionRefusedError("Unable to process speed test messages! See syslog for more details.")
+        processMessage(logMsg)
         #Retry if unsuccessful
         if waitForPing("8.8.8.8") and speedtest():
 	    logMsg = 'Speed Test Completed!'
-            if not processMessage(logMsg): raise Exception.OSError.ConnectionError.ConnectionRefusedError("Unable to process speed test messages! See syslog for more details.")
+            processMessage(logMsg)
         else:
             logMsg = 'Speed Test Unsuccessful!'
-            if not processMessage(logMsg, severity='critical'): raise Exception.OSError.ConnectionError.ConnectionRefusedError("Unable to process speed test messages! See syslog for more details.")
+            processMessage(logMsg, severity='critical')
     except Exception as e:
         processMessage(str(e), severity='critical', remotelog=False, rabbitlog=False)
+        raise
 
-channel.queue_declare(queue=syslogQueue)
+while True: 
+    try:
+        channel.queue_declare(queue=syslogQueue)
     
-channel.basic_consume(callback,
+        channel.basic_consume(callback,
                       queue=syslogQueue,
                       no_ack=True)
 
-syslogger('Started speed test message receiver', 'info')
-mac = get_mac()
-mac = ':'.join(("%012X" % mac)[i:i+2] for i in range(0, 12, 2))
-print mac
-#print ' [*] Waiting for messages. To exit press CTRL+C'
-channel.start_consuming()
+        syslogger('Started speed test message receiver', 'info')
+        #mac = get_mac()
+        #mac = ':'.join(("%012X" % mac)[i:i+2] for i in range(0, 12, 2))
+        #print mac
+        #print ' [*] Waiting for messages. To exit press CTRL+C'
+        channel.start_consuming()
+
+    except Exception as e:
+        print "Unable to perform speed test due to: "+str(e)+"\n"
+
 
