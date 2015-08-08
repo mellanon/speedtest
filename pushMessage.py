@@ -6,6 +6,16 @@ import datetime
 from datetime import datetime
 import logging
 import logging.handlers
+import yaml
+
+with open('/opt/speedtest/config.yaml', 'r') as f:
+    config = yaml.load(f)
+
+#Global variables
+##Rabbit MQ configuration
+username = config["rabbit-mq"]["username"]
+password = config["rabbit-mq"]["password"]
+syslogQueue = config["rabbit-mq"]["syslog-queue"]
 
 syslog = logging.getLogger('Syslog')
 syslog.setLevel(logging.DEBUG)
@@ -30,15 +40,15 @@ try:
         message = sys.stdin.readline().rstrip()
 
 	if len(message) > 1:
-            credentials = pika.PlainCredentials('speedtest', '1nfield')
+            credentials = pika.PlainCredentials(username, password)
 	    connection = pika.BlockingConnection(pika.ConnectionParameters(
                'localhost', 5672, '/', credentials))
 	    channel = connection.channel()
 
-	    channel.queue_declare(queue='linkup')
+	    channel.queue_declare(queue=syslogQueue)
 
 	    channel.basic_publish(exchange='',
-                      routing_key='linkup',
+                      routing_key=syslogQueue,
                       body=message)
 
 	    connection.close()

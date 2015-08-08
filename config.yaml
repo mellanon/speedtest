@@ -1,7 +1,15 @@
-device_info:
+device-info:
     deviceId: 1
     deviceType: 'RaspberryPi'
-message_server:
+    mac-address: '00:0c:29:59:59:7b'
+rabbit-mq:
     username: 'speedtest'
     password: '1nfield'
-    uri: 'http://192.168.56.222/speedtest/postResult.json'
+    send-queue: 'sendQueue'
+    syslog-queue: 'syslogQueue'
+message-receiver:
+    uri: 'http://scottf.ddns.net/speedtest/postResult.json'
+configuration-server:
+    uri: 'http://scottf.ddns.net/speedtest/postResult.json'
+general:
+    ping-timeout: 180 #seconds
