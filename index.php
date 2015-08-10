@@ -54,6 +54,58 @@ function saveResult($deviceId, $sessionId, $timeCreated, $msg){
     return true;
 }
 
+function getSpeedServerList($deviceId = 0, $deviceMac, $requestTime){
+    $con=mysqli_connect("localhost","root","bitnami","speedtest");
+
+    // Check connection
+    if (mysqli_connect_errno()) {
+        echo "Failed to connect to MySQL: " . mysqli_connect_error();
+    }
+
+    #TODO: Handle device identification based on both mac and deviceid
+    #TODO: Time out settings from central storage or configuration file
+
+    // escape variables for security
+    $deviceId = mysqli_real_escape_string($con, $deviceId);
+    $deviceMac = mysqli_real_escape_string($con, $deviceMac);
+    $requestTime = mysqli_real_escape_string($con, $requestTime);
+    $requestTime = date_create($requestTime);
+
+    //Get request older than 4 minutes
+    $sql = "SELECT rqid FROM request WHERE rqdeviceid = '$deviceId' AND EXTRACT(MINUTE FROM TIMEDIFF('$requestTime',rqcreated)) > 4"
+
+    //Time out request older than 4 minutes
+    $sql = "UPDATE request SET rqstatus = 4 WHERE rqid = "#value from above (loop) 
+    
+    //Log timeout 
+    $sql = "INSERT INTO request_history(rqhrqid, rqhlog) VALUES('$rqid','Request timed out')"
+
+    //Get requests in status new or in progress, newest first
+    $sql = "SELECT * FROM request WHERE rqstatus < 3 AND rqdeviceid = '$deviceId' ORDER BY rqid DESC"
+
+    //Store service order ID, bandwidth up/down of service
+    #$serviceOrderId = 
+    #$bandwidthDown =
+    #$bandwidthUp = 
+
+    //Get server list for current request
+    $sql = "SELECT srvid FROM request INNER JOIN rsp_serverlist ON rqrspid = rsp_serverlist.rspslrspid INNER JOIN serverlist ON rsp_serverlist.rspslsrvid = serverlist.srvid WHERE rqid = '$rqid' ORDER BY serverlist.srvdistance ASC"
+
+    if (!mysqli_query($con,$sql)) {
+        return false;
+        die('Error: ' . mysqli_error($con));
+    }
+
+    mysqli_close($con);
+
+    //Log on request history that new config sent to device X
+
+    //Return serviceOrderId, bandwidthDown, bandwidthUp, speedTestServerList[]
+
+    return true;
+
+}
+
 function deliver_response($format, $api_response){
  
     // Define HTTP responses
@@ -199,6 +251,21 @@ if($_SERVER['REQUEST_METHOD'] == "POST"){
                 $response['status'] = $api_response_code[ $response['code'] ]['HTTP Response'];
                 $response['data'] .= 'Insufficient data provided to save the result.'.$_POST['speedtest'];           
 	    }
+        case "getSessionByMac":
+            $data = json_decode($_POST['getSessionByMac'],true);
+
+            $deviceId = $data['deviceId'];
+            $macAddress = $data['mac'];
+            $requestTime = date("Y-m-d H:i:s"); #Time when the function was called
+
+            #Get active sessions for speed test device identified by deviceId or macAddress
+            #Time out defined by difference between requestTime and sessionStartTime
+            #Mark session as processing when sent off to client
+            #Return serviceOrderId and array of speed test servers
+        case "updateSessionState":
+            #get device by mac or id
+            #states; new, inprogress, completed, error
+
     }
 }
  
