@@ -9,8 +9,8 @@ rabbit-mq:
     syslog-queue: 'syslogQueue'
 message-receiver:
     uri: 'http://scottf.ddns.net/speedtest/postResult.json'
-configuration-server:
-    uri: 'http://scottf.ddns.net/speedtest/postResult.json'
+configuration-service:
+    uri: 'http://scottf.ddns.net/speedtest/getSessionConfiguration.json'
 general:
     ping-timeout: 180 #seconds
     remote-retry: 5 #10 seconds sleep = 60 seconds retry

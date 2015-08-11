@@ -15,6 +15,7 @@ import uuid
 from uuid import getnode as get_mac
 import json
 import requests
+import pprint
 
 #Load configuration file
 with open('/opt/speedtest/config.yaml', 'r') as f:
@@ -28,6 +29,9 @@ macAddress = config["device-info"]["mac-address"]
 
 ##Message receiver (Remote REST API)
 uri = config["message-receiver"]["uri"]
+
+##Configuration service (Remote REST API)
+configuri =  config["configuration-service"]["uri"]
 
 ##Rabbit MQ related configuration
 username = config["rabbit-mq"]["username"]
@@ -149,14 +153,39 @@ def waitForPing( ip ):
 def speedtest():
     #Add possibility to select which servers to execute speed test against
     #Add parameters to the python script to execute simple mode etc.
-
-    cmd = ['/usr/bin/python', '-u', '/opt/speedtest/speedtest_cli.py']
+    #TODO function to sort serverlist provided by configuration service
+    #TODO loop through server list if one fails
     
+    cmd = ['/usr/bin/python', '-u', '/opt/speedtest/speedtest_cli.py']
+
     try:
         logMsg = 'Initiating Speed Test'
         processMessage(logMsg)
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, preexec_fn=os.setsid)
-        #p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+
+        deviceMac = get_mac()
+        deviceMac = ':'.join(("%012X" % deviceMac)[i:i+2] for i in range(0, 12, 2))
+
+        request = getSpeedTestRequest(deviceMac)
+        #TODO Validate result from getSpeedTestRequest
+        srvList = request['request']['serverlist']
+
+        rqId = request['request']['rqid']
+        serviceOrderId = request['request']['serviceorderid']
+        bwDown = request['request']['bandwidthdown']
+        bwUp = request['request']['bandwidthup']
+
+        logMsg = 'No Speed Test server related to the RSP of the service order. Selecting the closest one.'
+
+        if len(srvList) > 0:
+            #TODO sort list based on distance
+            cmd = ['/usr/bin/python', '-u', '/opt/speedtest/speedtest_cli.py', '--server', srvList[0]]
+            logMsg = 'Selecting Speed Test server ('+srvList[0]+') based on service order '+str(serviceOrderId)+' with bandwidth setting '+bwDown+'/'+bwUp+' Mb/s'
+
+        processMessage(logMsg)
+	pprint.pprint(cmd)
+
+        #p = subprocess.Popen(cmd, stdout=subprocess.PIPE, preexec_fn=os.setsid)
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
 
         for line in iter(p.stdout.readline,''):
             sys.stdout.flush()
@@ -166,7 +195,6 @@ def speedtest():
         return not p.returncode
     except Exception as e:
         processMessage("Unable to complete Speed Test through external python script: "+str(cmd),remotelog=False, rabbitlog=False)
-        os.killpg(p.pid, signal.SIGTERM)
         raise
 
 #Implement function to validate that dns can be resolved
@@ -199,8 +227,48 @@ def remoteLogger(msg):
             if tries > remoteLoggerRetry:
                tryAgain = False
                raise
-        #wait 5 seconds
+        #wait 10 seconds
         time.sleep(10)
+
+def getSpeedTestRequest(deviceMac, **kwargs):
+    tries = 0
+    tryAgain = True
+
+    if kwargs.has_key('deviceid'):
+        deviceId = kwargs.get('deviceid', None)
+    else:
+   	deviceId = 0
+
+    headers = {'Content-type': 'application/x-www-form-urlencoded ', 'Accept': 'text/plain'}
+    json_data = json.dumps({'deviceId':deviceId, 'deviceMac':deviceMac})
+    payload = {'getconfiguration':json_data}
+    
+    #Try to send HTTP Request, retry 3 times
+    while tryAgain:
+        try:
+            tries += 1
+            r = requests.post(configuri, data=payload, headers=headers)
+            response = json.loads(r.text)
+            request = json.loads(response['data'])
+            tryAgain = False
+        except requests.exceptions.Timeout:
+            processMessage("Connection to server: "+configuri+" timed out. Tried "+str(tries)+" times.", remotelog=False)
+            if tries > remoteLoggerRetry:
+                tryAgain = False
+        except requests.exceptions.TooManyRedirects:
+            processMessage("Too many redirects when trying to connect to: "+configuri+". Tried "+str(tries)+" times.", remotelog=False)
+            if tries > remoteLoggerRetry:
+                tryAgain = False
+        except requests.exceptions.RequestException as e:
+            # catastrophic error. bail.
+            processMessage("HTTP Request Exception. Trying to connect to "+configuri+". Tried "+str(tries)+" times.", remotelog=False, severity='critical')
+            if tries > remoteLoggerRetry:
+               tryAgain = False
+               raise
+        #wait 10 seconds
+        time.sleep(10)
+    return request
+
 
 def callback(ch, method, properties, body):
     global sessionId
@@ -226,11 +294,8 @@ while True:
         channel.basic_consume(callback,
                       queue=syslogQueue,
                       no_ack=True)
-
         syslogger('Started speed test message receiver', 'info')
-        #mac = get_mac()
-        #mac = ':'.join(("%012X" % mac)[i:i+2] for i in range(0, 12, 2))
-        #print mac
+
         #print ' [*] Waiting for messages. To exit press CTRL+C'
         channel.start_consuming()
 
