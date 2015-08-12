@@ -29,7 +29,7 @@
 
 #include_once('config.php');
 
-function saveResult($deviceId, $sessionId, $timeCreated, $msg){
+function saveResult($deviceId, $sessionId, $timeCreated, $msg, $rqid){
     $con=mysqli_connect("localhost","root","bitnami","speedtest");
 
     // Check connection
@@ -42,7 +42,8 @@ function saveResult($deviceId, $sessionId, $timeCreated, $msg){
     $sessionId = mysqli_real_escape_string($con, $sessionId);
     $timeCreated = mysqli_real_escape_string($con, $timeCreated);
     $msg = mysqli_real_escape_string($con, $msg);
-    $sql = "INSERT INTO result(deviceid, sessionid, msg, created) VALUES('$deviceId', '$sessionId', '$msg', '$timeCreated')";
+    $rqid = mysqli_real_escape_string($con, $rqid);
+    $sql = "INSERT INTO result(deviceid, sessionid, msg, created, requestid) VALUES('$deviceId', '$sessionId', '$msg', '$timeCreated', $rqid)";
     
     if (!mysqli_query($con,$sql)) {
         return false;
@@ -63,7 +64,6 @@ function timeOutRequest($deviceId = 0, $deviceMac){
     }
 
     $requestTime = date("Y-m-d H:i:s");
-
     //Get request older than 4 minutes
     if (!$deviceId){
         $sql = "SELECT rqid FROM request WHERE rqmac = '$deviceMac'";
@@ -71,10 +71,9 @@ function timeOutRequest($deviceId = 0, $deviceMac){
         $sql = "SELECT rqid FROM request WHERE rqdeviceid = '$deviceId'";
     }
     
-    $sql .= " AND EXTRACT(MINUTE FROM TIMEDIFF('$requestTime',rqcreated)) > 4 AND rqstatus < 4";
-
+    #$sql .= " AND EXTRACT(MINUTE FROM TIMEDIFF('$requestTime',rqcreated)) > 4 AND rqstatus < 4";
+    $sql .= " AND  TIMESTAMPDIFF(SECOND, '$requestTime', rqcreated) < -300 AND rqstatus < 4";
     $result = mysqli_query($con, $sql);
-
     if (mysqli_num_rows($result) > 0) {
         while ($row = mysqli_fetch_assoc($result)) {
             //Time out request
@@ -98,6 +97,46 @@ function timeOutRequest($deviceId = 0, $deviceMac){
     return true;
 }
 
+function updateRequestStatus($rqId, $rqStatus){
+    $con=mysqli_connect("localhost","root","bitnami","speedtest");
+
+    if (mysqli_connect_errno()) {
+        echo "Failed to connect to MySQL: " . mysqli_connect_error();
+        return false;
+    }
+
+    $sql = "SELECT rqsname FROM request_status WHERE rqsid = ".$rqId;
+    
+    $result = mysqli_query($con, $sql);
+
+    if (mysqli_num_rows($result) > 0) {
+        //Get status name
+        $result = $result->fetch_assoc();
+        $rqStatusName = $result['rqsname'];
+    }else{
+        mysqli_close($con);
+        echo "Failed to get request status name.";
+        return false;
+    }
+
+
+    $sql = "UPDATE request SET rqstatus = $rqStatus WHERE rqid = ".$rqId;
+    if (mysqli_query($con, $sql)){
+        //Complete request
+        $sql = "INSERT INTO request_history(rqhrqid, rqhlog) VALUES('$rqId','Request status set to $rqStatusName')";
+        if (!mysqli_query($con, $sql)){
+            echo "Failed to log completed request!";
+            return false;
+        }
+    }else{
+        mysqli_close($con);
+        echo "Failed to mark request as completed.";
+        return false;
+    }
+    mysqli_close($con);
+    return true;
+}
+
 function getSpeedServerList($deviceId = 0, $deviceMac){
     $con=mysqli_connect("localhost","root","bitnami","speedtest");
 
@@ -106,9 +145,6 @@ function getSpeedServerList($deviceId = 0, $deviceMac){
         echo "Failed to connect to MySQL: " . mysqli_connect_error();
         return false;
     }
-
-    #TODO: Handle device identification based on both mac and deviceid
-    #TODO: Time out settings from central storage or configuration file
 
     // escape variables for security
     $deviceId = mysqli_real_escape_string($con, $deviceId);
@@ -131,11 +167,22 @@ function getSpeedServerList($deviceId = 0, $deviceMac){
         $serviceOrderId = $result['rqserviceorderid'];
         $bandwidthDown = $result['rqbwdown'];
         $bandwidthUp = $result['rqbwup'];
+        $rqstatus = $result['rqstatus'];
     }else{
         echo "Failed to fetch request information";
         return false;
     }
 
+    //If existing request in progress, reset speed test results to collect new data
+    /*
+    if ($rqstatus == 2){
+        $sql = "DELETE FROM result WHERE requestid = ".$rqid;
+        if (!mysqli_query($con, $sql)){
+            echo "Unable to delete speed test result for request $rqid";
+            return false;
+        }
+    }
+    */
     //Get server list for current request
     $sql = "SELECT srvid FROM request INNER JOIN rsp_serverlist ON rqrspid = rsp_serverlist.rspslrspid INNER JOIN serverlist ON rsp_serverlist.rspslsrvid = serverlist.srvid WHERE rqid = '$rqid' ORDER BY serverlist.srvdistance ASC";
 
@@ -150,6 +197,7 @@ function getSpeedServerList($deviceId = 0, $deviceMac){
             "serviceorderid" => $serviceOrderId,
             "bandwidthdown" => $bandwidthDown,
             "bandwidthup" => $bandwidthUp,
+            "rqstatus" => $rqstatus,
             "serverlist" => $serverlist
         )));
 
@@ -302,7 +350,7 @@ if( strcasecmp($_GET['method'],'hello') == 0){
     $response['data'] = 'Hello World';
 }
 
-/*
+
 if($_SERVER['REQUEST_METHOD'] == "GET"){
     switch($_GET['method']){
         case "getSessionConfiguration":
@@ -328,9 +376,24 @@ if($_SERVER['REQUEST_METHOD'] == "GET"){
                 $response['status'] = $api_response_code[ $response['code'] ]['HTTP Response'];
                 $response['data'] .= 'Unable to get server list due to insufficient data.'.$_GET['getconfiguration'];
             }
+/*
+        case "updateRequestStatus":
+            $data = json_decode($_GET['updaterequeststatus'],true);
+            $rqId = $data['rqid'];
+            $rqStatus = $data['rqstatus'];
+            if((isset($rqId) && isset($rqStatus)) && updateRequestStatus($rqId, $rqStatus)){
+                $response['code'] = 1;
+                $response['status'] = $api_response_code[ $response['code'] ]['HTTP Response'];
+                $response['data'] = "Set response status $rqStatus on request=$rqId.";
+            }else{
+                $response['code'] = 5;
+                $response['status'] = $api_response_code[ $response['code'] ]['HTTP Response'];
+                $response['data'] .= 'Insufficient data provided to save the result.'.$_GET['updaterequeststatus'];           
+            }
+ */
     }
 }
- */            
+            
 
 
 if($_SERVER['REQUEST_METHOD'] == "POST"){
@@ -340,17 +403,18 @@ if($_SERVER['REQUEST_METHOD'] == "POST"){
             $deviceId = $data['deviceId'];
 	        $timeCreated = $data['timeCreated'];
             $msg = $data['msg'];
-	        $sessionId = $data['sessionId'];
+            $sessionId = $data['sessionId'];
+            $rqid = $data['rqid'];
             
-            if((isset($deviceId) && isset($timeCreated) && isset($msg) && isset($sessionId)) && saveResult($deviceId, $sessionId, $timeCreated, $msg)){
+            if((isset($deviceId) && isset($timeCreated) && isset($msg) && isset($sessionId) && isset($rqid)) && saveResult($deviceId, $sessionId, $timeCreated, $msg, $rqid)){
                 $response['code'] = 1;
                 $response['status'] = $api_response_code[ $response['code'] ]['HTTP Response'];
-                $response['data'] = "Message created $timeCreated from $devicdId has been saved";
+                $response['data'] = "Message created $timeCreated based on request=$rqid from device=$devicdId has been saved";
             }else{
                 $response['code'] = 5;
                 $response['status'] = $api_response_code[ $response['code'] ]['HTTP Response'];
                 $response['data'] .= 'Insufficient data provided to save the result.'.$_POST['speedtest'];           
-	    }
+	        }
         case "getSessionConfiguration":
             $data = json_decode($_POST['getconfiguration'],true);
 
@@ -363,7 +427,7 @@ if($_SERVER['REQUEST_METHOD'] == "POST"){
                 if(!$serverList ){
                     $response['code'] = 5;
                     $response['status'] = $api_response_code[ $response['code'] ]['HTTP Response'];
-                    $response['data'] .= 'Unable to get server list due to an internal server error.'.$_GET['getconfiguration']; 
+                    $response['data'] .= 'Unable to get server list due to an internal server error.'.$_POST['getconfiguration']; 
                 }else{
                     $response['code'] = 1;
                     $response['status'] = $api_response_code[ $response['code'] ]['HTTP Response'];
@@ -372,12 +436,24 @@ if($_SERVER['REQUEST_METHOD'] == "POST"){
             }else{
                 $response['code'] = 5;
                 $response['status'] = $api_response_code[ $response['code'] ]['HTTP Response'];
-                $response['data'] .= 'Unable to get server list due to insufficient data.'.$_GET['getconfiguration'];
+                $response['data'] .= 'Unable to get server list due to insufficient data.'.$_POST['getconfiguration'];
             }
-        case "updateSessionState":
-            #get device by mac or id
-            #states; new, inprogress, completed, error
-
+        case "updateStatus":
+            if(isset($_POST['updaterequeststatus'])){
+                $data = json_decode($_POST['updaterequeststatus'],true);
+                $rqId = $data['rqId'];
+                $rqStatus = $data['rqStatus'];
+            
+                if((isset($rqId) && isset($rqStatus)) && updateRequestStatus($rqId, $rqStatus)){
+                    $response['code'] = 1;
+                    $response['status'] = $api_response_code[ $response['code'] ]['HTTP Response'];
+                    $response['data'] = "Set response status $rqStatus on request=$rqId.";
+                }else{
+                    $response['code'] = 5;
+                    $response['status'] = $api_response_code[ $response['code'] ]['HTTP Response'];
+                    $response['data'] .= 'Insufficient data provided to save the result.'.$_POST['updaterequeststatus'];           
+                }
+            }
     }
 }
  
