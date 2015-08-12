@@ -7,10 +7,16 @@ rabbit-mq:
     password: '1nfield'
     send-queue: 'sendQueue'
     syslog-queue: 'syslogQueue'
-message-receiver:
-    uri: 'http://scottf.ddns.net/speedtest/postResult.json'
-configuration-service:
-    uri: 'http://scottf.ddns.net/speedtest/getSessionConfiguration.json'
+message-service:
+    uri: 'http://scottf.ddns.net/speedtest/'
+    post-svc: 'postResult.json'
+
+request-service:
+    uri: 'http://scottf.ddns.net/speedtest/'
+    get-config-svc: 'getSessionConfiguration.json'
+    update-status-svc: 'updateStatus.json'
 general:
     ping-timeout: 180 #seconds
-    remote-retry: 5 #10 seconds sleep = 60 seconds retry
+    remote-timeout: 120 #seconds 
+    request-config-timeout: 120 #seconds
+    update-request-status-timeout: 120 #seconds
