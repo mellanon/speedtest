@@ -99,7 +99,8 @@ def processMessage(message, **kwargs):
     syslog = True
     rabbitlog = True    
     logError = False
-    rqid = 0;
+    rqid = 0
+    tries = 0
 
     if kwargs.has_key('severity'):
         severity = kwargs.get('severity', None)
@@ -124,6 +125,9 @@ def processMessage(message, **kwargs):
     if kwargs.has_key('rqid'):
        rqid = kwargs.get('rqid', None)
 
+    if kwargs.has_key('tries'):
+       tries = kwargs.get('tries', None)
+
     #Log to syslog?
     if syslog:
         syslogger(message, severity)
@@ -133,10 +137,8 @@ def processMessage(message, **kwargs):
         logError = rabbitmqLog(message, queue=queue)
 
     #Send log to remote log server
-    if remotelog and rqid > 0:
-        logError = remoteLogger(message, rqid=rqid)
-    else:
-        logError = remoteLogger(message)
+    logError = remoteLogger(message, rqid=rqid, tries=tries)
+    #logError = remoteLogger(message)
 
 #Make sure that the speed test device can reach Internet
 def waitForPing( ip, **kwargs):
@@ -224,32 +226,30 @@ def remoteLogger(msg, **kwargs):
     if kwargs.has_key('rqid'):
         rqid = kwargs.get('rqid', None)
 
+    if kwargs.has_key('tries'):
+        tries = kwargs.get('tries', None)
+
     headers = {'Content-type': 'application/x-www-form-urlencoded ', 'Accept': 'text/plain'}
     json_data = json.dumps({'deviceId':deviceId, 'sessionId':str(sessionId), 'timeCreated':str(datetime.now()), 'msg':msg, 'rqid':rqid}) 
     payload = {'speedtest':json_data}
-
     #Try to send HTTP Request, retry 3 times
     while tryAgain:
         try:
-            tries += 1
-            r = requests.post(uri, data=payload, headers=headers)
-            tryAgain = False
+            if tries >= noRetries:
+                tryAgain = False
+                raise
+            else: 
+                r = requests.post(uri, data=payload, headers=headers)
+                tryAgain = False
         except requests.exceptions.Timeout:
-            processMessage("Connection to server: "+uri+" timed out. Timeout "+str(tries*sleep)+" times.", remotelog=False)
-            if tries > noRetries:
-                tryAgain = False
+            syslogger("Connection to server: "+uri+" timed out. Retried for  "+str(tries*sleep)+" seconds (timeout="+str(remoteLoggerTimeout)+"s)", 'critical')
         except requests.exceptions.TooManyRedirects:
-            processMessage("Too many redirects when trying to connect to: "+uri+". Timeout "+str(tries*sleep)+" times.", remotelog=False)
-            if tries > noRetries:
-                tryAgain = False
+            syslogger("Too many redirects when trying to connect to: "+uri+". Retried for "+str(tries*sleep)+" seconds (timeout="+str(remoteLoggerTimeout)+"s)", 'critical')
         except requests.exceptions.RequestException as e:
-            # catastrophic error. bail.
-            processMessage("HTTP Request Exception. Trying to connect to "+uri+". Timeout "+str(tries*sleep)+" times.", remotelog=False, severity='critical')
-            if tries > noRetries:
-               tryAgain = False
-               raise
-        #wait 10 seconds
-        if tryAgain: time.sleep(10)
+            syslogger("HTTP Request Exception. Trying to connect to "+uri+". Retried for "+str(tries*sleep)+" seconds (timeout="+str(remoteLoggerTimeout)+"s)", 'critical')
+        
+        if tryAgain: time.sleep(sleep)
+        tries += 1
 
 def getSpeedTestRequest(deviceMac, **kwargs):
     uri = configURI+getConfigSvc
@@ -266,36 +266,32 @@ def getSpeedTestRequest(deviceMac, **kwargs):
     headers = {'Content-type': 'application/x-www-form-urlencoded ', 'Accept': 'text/plain'}
     json_data = json.dumps({'deviceId':deviceId, 'deviceMac':deviceMac})
     payload = {'getconfiguration':json_data}
-    #Try to send HTTP Request, retry 3 times
+
     while tryAgain:
         try:
-            tries += 1
-            r = requests.post(uri, data=payload, headers=headers)
-            if r.status_code == 404:
-                processMessage("Unable to get device ("+deviceMac+") configuration. Waited for "+str(tries*sleep)+" s, timeout = "+str(requestConfigTimeout)+"s")
-                tryAgain = True
+            if tries >= noRetriesConfig:
+                tryAgain = False
+                raise
             else:
-                response = json.loads(r.text)
-                request = json.loads(response['data'])
-                processMessage("Found request configuration for device ("+deviceMac+").")
-                tryAgain = False
+                r = requests.post(uri, data=payload, headers=headers)
+                if r.status_code == 404:
+                    processMessage("Unable to get device ("+deviceMac+") configuration. Waited for "+str(tries*sleep)+" s, timeout = "+str(requestConfigTimeout)+"s)")
+                    tryAgain = True
+                else:
+                    response = json.loads(r.text)
+                    request = json.loads(response['data'])
+                    processMessage("Found request configuration for device ("+deviceMac+").")
+                    tryAgain = False
+                    return request
         except requests.exceptions.Timeout:
-            processMessage("Connection to server: "+uri+" timed out. Timeout "+str(tries*sleep)+" seconds.", remotelog=False)
-            if tries > noRetriesConfig:
-                tryAgain = False
+            syslogger("Connection to server: "+uri+" timed out.  "+str(tries*sleep)+" seconds.", 'critical')
         except requests.exceptions.TooManyRedirects:
-            processMessage("Too many redirects when trying to connect to: "+uri+". Tried "+str(tries*sleep)+" seconds.", remotelog=False)
-            if tries > noRetriesConfig:
-                tryAgain = False
+            syslogger("Too many redirects when trying to connect to: "+uri+". Retried for  "+str(tries*sleep)+" seconds (timeout="+str(requestConfigTimeout)+"s)", 'critical')
         except requests.exceptions.RequestException as e:
-            # catastrophic error. bail.
-            processMessage("HTTP Request Exception. Trying to connect to "+uri+". Tried "+str(tries*sleep)+" times.", remotelog=False, severity='critical')
-            if tries > noRetriesConfig:
-               tryAgain = False
-               raise
-        #wait sleep seconds
+            syslogger("HTTP Request Exception. Trying to connect to "+uri+". Retried for "+str(tries*sleep)+" seconds (timeout="+str(requestConfigTimeout)+"s)", 'critical')
+
+        tries += 1
         if tryAgain: time.sleep(sleep)
-    return request
 
 def updateRequestStatus(rqId, rqStatus):
     uri = configURI+updateStatusSvc
@@ -308,24 +304,21 @@ def updateRequestStatus(rqId, rqStatus):
     payload = {'updaterequeststatus':json_data}
     while tryAgain:
         try:
-            tries += 1
-            r = requests.post(uri, data=payload, headers=headers)
-            tryAgain = False
+	    if tries >= noRetries:
+                tryAgain = False
+                raise
+            else:
+                r = requests.post(uri, data=payload, headers=headers)
+                tryAgain = False
         except requests.exceptions.Timeout:
-            processMessage("Connection to server: "+uri+" timed out. Timeout "+str(tries*sleep)+" times.", remotelog=False)
-            if tries > noRetries:
-                tryAgain = False
+            syslogger("Connection to server: "+uri+" timed out. Retried for  "+str(tries*sleep)+" seconds (timeout="+str(updateRequestStatusTimeout)+"s)", 'critical')
         except requests.exceptions.TooManyRedirects:
-            processMessage("Too many redirects when trying to connect to: "+uri+". Timeout "+str(tries*sleep)+" times.", remotelog=False)
-            if tries > noRetries:
-                tryAgain = False
+            syslogger("Too many redirects when trying to connect to: "+uri+". Retried for "+str(tries*sleep)+" seconds (timeout="+str(updateRequestStatusTimeout)+"s)", 'critical')
         except requests.exceptions.RequestException as e:
-            # catastrophic error. bail.
-            processMessage("HTTP Request Exception. Trying to connect to "+uri+". Timeout "+str(tries*sleep)+" times.", remotelog=False, severity='critical')
-            if tries > noRetries:
-               tryAgain = False
-               raise
+            syslogger("HTTP Request Exception. Trying to connect to "+uri+". Retried for  "+str(tries*sleep)+" seconds (timeout="+str(updateRequestStatusTimeout)+"s)", 'critical')
+
         #wait 10 seconds
+        tries += 1
         if tryAgain: time.sleep(10)
 
 def callback(ch, method, properties, body):
@@ -337,8 +330,12 @@ def callback(ch, method, properties, body):
         deviceMac = ':'.join(("%012X" % deviceMac)[i:i+2] for i in range(0, 12, 2))
 
         request = getSpeedTestRequest(deviceMac)
-        rqId = request['request']['rqid']
-
+        
+        if request == None:
+            raise ValueError('Unable to get speed test request configuration!')
+	else:
+            rqId = request['request']['rqid']
+	
         logMsg = 'Speed device has been plugged in. Initiating speed test process...' #Start tag to identify session start
         processMessage(logMsg, rqid=rqId)
         #Retry if unsuccessful
@@ -350,7 +347,7 @@ def callback(ch, method, properties, body):
             logMsg = 'Speed Test Unsuccessful!'
             processMessage(logMsg, severity='critical', rqid=rqId)
     except Exception as e:
-        processMessage(str(e), severity='critical', remotelog=False, rabbitlog=False)
+        syslogger(str(e), 'critical')
         raise
 
 while True: 
