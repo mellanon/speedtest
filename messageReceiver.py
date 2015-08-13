@@ -53,7 +53,19 @@ pingTimeOut = config["general"]["ping-timeout"]
 remoteLoggerTimeout = config["general"]["remote-timeout"]
 requestConfigTimeout = config["general"]["request-config-timeout"]
 updateRequestStatusTimeout = config["general"]["update-request-status-timeout"]
+speedTestMiniEnabled = config["speed-test"]["mini-enabled"]
+speedTestMiniServer = config["speed-test"]["mini-server"]
+speedTestSimple = config["speed-test"]["simple-enabled"]
 sessionId = ""
+
+##Read commandline parameters if present (override config file)
+#TODO - Add argument support to the /init.d/messagereceiver.sh start script
+for arg in sys.argv: 
+    if arg == 'simple':
+        speedTestSimple = True
+    if arg == 'mini':
+        speedTestMiniEnabled = True
+
 
 #Initialise syslogger
 syslog = logging.getLogger('Syslog')
@@ -198,15 +210,19 @@ def speedtest(request):
 
         logMsg = 'No Speed Test server related to the RSP of the service order. Selecting the closest one.'
 
-        if len(srvList) > 0:
+        if len(srvList) > 0 and not speedTestMiniEnabled:
             #TODO sort list based on distance
             cmd = ['/usr/bin/python', '-u', '/opt/speedtest/speedtest_cli.py', '--server', srvList[0]]
             logMsg = 'Selecting Speed Test server ('+srvList[0]+') based on service order '+str(serviceOrderId)+' with bandwidth setting '+bwDown+'/'+bwUp+' Mb/s'
+        elif speedTestMiniEnabled:
+            cmd = ['/usr/bin/python', '-u', '/opt/speedtest/speedtest_cli.py', '--mini', speedTestMiniServer]
+            logMsg = 'Selecting Speed Test Mini Server ('+speedTestMiniServer+') defined in config file.'
 
+        if speedTestSimple:
+            cmd.append('--simple')
+ 
         processMessage(logMsg, rqid=rqId)
-	#pprint.pprint(cmd)
 
-        #p = subprocess.Popen(cmd, stdout=subprocess.PIPE, preexec_fn=os.setsid)
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
 
         for line in iter(p.stdout.readline,''):

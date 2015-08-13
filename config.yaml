@@ -16,7 +16,11 @@ request-service:
     get-config-svc: 'getSessionConfiguration.json'
     update-status-svc: 'updateStatus.json'
 general:
-    ping-timeout: 180 #seconds
-    remote-timeout: 120 #seconds 
-    request-config-timeout: 120 #seconds
-    update-request-status-timeout: 120 #seconds
+    ping-timeout: 60 #seconds
+    remote-timeout: 60 #seconds 
+    request-config-timeout: 60 #seconds
+    update-request-status-timeout: 60 #seconds
+speed-test:
+    mini-enabled: true
+    mini-server: 'http://192.168.56.222/mini/'
+    simple-enabled: false
