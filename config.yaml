@@ -17,6 +17,6 @@ request-service:
     update-status-svc: 'updateStatus.json'
 general:
     ping-timeout: 180 #seconds
-    remote-timeout: 30 #seconds 
-    request-config-timeout: 30 #seconds
+    remote-timeout: 120 #seconds 
+    request-config-timeout: 120 #seconds
     update-request-status-timeout: 120 #seconds

@@ -17,6 +17,11 @@ import json
 import requests
 import pprint
 
+#TODO: Run speed test in simple mode by getting run mode from argsv (init-script parameter)
+#TODO: Method to sort the provided speed test server list based on distance from speed test device
+#TODO: Loop through speed test server list if test fail
+#TODO: Robustness if RabbitMQ fails?
+
 #Load configuration file
 with open('/opt/speedtest/config.yaml', 'r') as f:
     config = yaml.load(f)
@@ -137,7 +142,8 @@ def processMessage(message, **kwargs):
         logError = rabbitmqLog(message, queue=queue)
 
     #Send log to remote log server
-    logError = remoteLogger(message, rqid=rqid, tries=tries)
+    if remotelog:
+        logError = remoteLogger(message, rqid=rqid, tries=tries)
     #logError = remoteLogger(message)
 
 #Make sure that the speed test device can reach Internet
@@ -255,6 +261,7 @@ def getSpeedTestRequest(deviceMac, **kwargs):
     uri = configURI+getConfigSvc
     tries = 0
     tryAgain = True
+    valueError = False
     sleep= 10
     noRetriesConfig = requestConfigTimeout/sleep
 
@@ -269,13 +276,17 @@ def getSpeedTestRequest(deviceMac, **kwargs):
 
     while tryAgain:
         try:
-            if tries >= noRetriesConfig:
+            if tries >= noRetriesConfig and not valueError:
                 tryAgain = False
                 raise
+            elif tries >= noRetriesConfig+1 and valueError:
+  	        raise ValueError("Unable to get device ("+deviceMac+") configuration.")
             else:
                 r = requests.post(uri, data=payload, headers=headers)
                 if r.status_code == 404:
-                    processMessage("Unable to get device ("+deviceMac+") configuration. Waited for "+str(tries*sleep)+" s, timeout = "+str(requestConfigTimeout)+"s)")
+                    logMsg = "Unable to get device ("+deviceMac+") configuration. Retried for "+str(tries*sleep)+" seconds (timeout="+str(requestConfigTimeout)+"s)"
+                    processMessage(logMsg)
+                    if tries >= noRetriesConfig-1: valueError = True 
                     tryAgain = True
                 else:
                     response = json.loads(r.text)
@@ -309,6 +320,11 @@ def updateRequestStatus(rqId, rqStatus):
                 raise
             else:
                 r = requests.post(uri, data=payload, headers=headers)
+                if r.status_code == 404:
+                    logMsg = 'Unable to update Speed Test Request Configuration Status (rqId:'+str(rqId)+' rqStatus:'+str(rqStatus)+')'
+                else:
+                    logMsg = 'Updated Speed Test Request Configuration Status (rqId:'+str(rqId)+' rqStatus:'+str(rqStatus)+')'
+                processMessage(logMsg, rqid=rqId)
                 tryAgain = False
         except requests.exceptions.Timeout:
             syslogger("Connection to server: "+uri+" timed out. Retried for  "+str(tries*sleep)+" seconds (timeout="+str(updateRequestStatusTimeout)+"s)", 'critical')
@@ -329,6 +345,9 @@ def callback(ch, method, properties, body):
         deviceMac = get_mac()
         deviceMac = ':'.join(("%012X" % deviceMac)[i:i+2] for i in range(0, 12, 2))
 
+        logMsg = 'Fetching Speed Test request configuratin for device '+deviceMac
+        processMessage(logMsg, remotelog=False)
+
         request = getSpeedTestRequest(deviceMac)
         
         if request == None:
@@ -336,13 +355,13 @@ def callback(ch, method, properties, body):
 	else:
             rqId = request['request']['rqid']
 	
-        logMsg = 'Speed device has been plugged in. Initiating speed test process...' #Start tag to identify session start
+        logMsg = 'Speed device has been plugged in. Initiating speed test process...'
         processMessage(logMsg, rqid=rqId)
         #Retry if unsuccessful
         if waitForPing("8.8.8.8", rqid=rqId) and speedtest(request):
+            updateRequestStatus(rqId, 3)
 	    logMsg = 'Speed Test Completed!'
             processMessage(logMsg, rqid=rqId)
-            updateRequestStatus(rqId, 3)
         else:
             logMsg = 'Speed Test Unsuccessful!'
             processMessage(logMsg, severity='critical', rqid=rqId)
