@@ -41,7 +41,7 @@ jQuery(function($) {
                 } else {
                   len = data.result.length;
                     term.clear();
-                    term.echo("D | Session ID       | Timestamp           | Log Message");
+                    term.echo("R  | D | Device MAC        | SOID   | Timestamp           | Log Message");
                     for(var i=0;i<len; ++i) {
                       var s = data.result[i].join(' | ');
 		      s = s.replace(/(?:\r\n|\r|\n)/g, '');
