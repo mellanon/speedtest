@@ -105,7 +105,7 @@ function updateRequestStatus($rqId, $rqStatus){
         return false;
     }
 
-    $sql = "SELECT rqsname FROM request_status WHERE rqsid = ".$rqId;
+    $sql = "SELECT rqsname FROM request_status WHERE rqsid = ".$rqStatus;
     
     $result = mysqli_query($con, $sql);
 
@@ -159,7 +159,6 @@ function getSpeedServerList($deviceId = 0, $deviceMac){
     }
 
     $result = mysqli_query($con, $sql);
-
     if (mysqli_num_rows($result) > 0) {
         //Store service order ID, bandwidth up/down of service
         $result = $result->fetch_assoc();
@@ -191,37 +190,36 @@ function getSpeedServerList($deviceId = 0, $deviceMac){
         while($row = $result->fetch_row()) {
             $serverlist[]=$row[0];
         }
-        $json = json_encode(array(
-        "request" => array(
-            "rqid" => $rqid,
-            "serviceorderid" => $serviceOrderId,
-            "bandwidthdown" => $bandwidthDown,
-            "bandwidthup" => $bandwidthUp,
-            "rqstatus" => $rqstatus,
-            "serverlist" => $serverlist
-        )));
+    }else{
+        $serverlist = null;
+    }
 
-        //Set request status to in progress
-        $sql = "UPDATE request SET rqstatus = 2 WHERE rqid = $rqid";
-        if (mysqli_query($con, $sql)){
-            //Log action, if request status update succeeded         
-            $sql = "INSERT INTO request_history (rqhrqid, rqhlog) VALUES ($rqid, 'Speed Test configuration sent to device $deviceId $deviceMac for service order $serviceOrderId')";
-            if (!mysqli_query($con, $sql)){
-                mysqli_close($con);
-                return false;
-                die('Error: ' . mysqli_error($con));
-            }
-        }else{
+    $json = json_encode(array(
+    "request" => array(
+        "rqid" => $rqid,
+        "serviceorderid" => $serviceOrderId,
+        "bandwidthdown" => $bandwidthDown,
+        "bandwidthup" => $bandwidthUp,
+        "rqstatus" => $rqstatus,
+        "serverlist" => $serverlist
+    )));
+
+    //Set request status to in progress
+    $sql = "UPDATE request SET rqstatus = 2 WHERE rqid = $rqid";
+    if (mysqli_query($con, $sql)){
+        //Log action, if request status update succeeded         
+        $sql = "INSERT INTO request_history (rqhrqid, rqhlog) VALUES ($rqid, 'Speed Test configuration sent to device $deviceId $deviceMac for service order $serviceOrderId')";
+        if (!mysqli_query($con, $sql)){
             mysqli_close($con);
             return false;
             die('Error: ' . mysqli_error($con));
         }
-        return $json;
     }else{
         mysqli_close($con);
         return false;
         die('Error: ' . mysqli_error($con));
     }
+    return $json;
 }
 
 function deliver_response($format, $api_response){
@@ -355,7 +353,7 @@ if($_SERVER['REQUEST_METHOD'] == "GET"){
     switch($_GET['method']){
         case "getSessionConfiguration":
             $data = json_decode($_GET['getconfiguration'],true);
-
+print_r($data);
             $deviceId = $data['deviceId'];
             $deviceMac = $data['deviceMac'];
             $requestTime = date("Y-m-d H:i:s"); #Time when the function was called
