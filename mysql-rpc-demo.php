@@ -239,8 +239,8 @@ class MysqlDemo {
                           "ed to select, insert, delete ".
                           "or update 'test' table");
     }*/
-    $deviceid = $query;
-    $query = "SELECT rqid, deviceid, rqmac, rqserviceorderid, timestamp, msg FROM result INNER JOIN request ON request.rqid = requestid WHERE deviceid = $deviceid ORDER BY ID DESC LIMIT 30";
+    $devicemac = $query;
+    $query = "SELECT rqid, deviceid, rqmac, rqserviceorderid, timestamp, msg FROM result INNER JOIN request ON request.rqid = requestid WHERE rqmac = '$devicemac' ORDER BY ID DESC LIMIT 30";
     #$query = "SELECT deviceid, sessionid, timestamp, msg FROM result WHERE deviceid = ".$query." ORDER BY ID DESC LIMIT 30";
     if ($res = mysql_query($query)) {
       if ($res === true) {

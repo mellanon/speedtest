@@ -1,4 +1,35 @@
 <?php
+$saved = false;
+if (isset($_GET['post'])){
+
+    if (isset($_POST['name']) && isset($_POST['mac']) && isset($_POST['serviceorderid']) && isset($_POST['rsp']) && isset($_POST['status']) && isset($_POST['bwdown']) && isset($_POST['bwup']) && isset($_POST['created'])){
+
+        $con=mysqli_connect("localhost","root","bitnami","speedtest");
+        // Check connection
+        if (mysqli_connect_errno()) {
+            echo "Failed to connect to MySQL: " . mysqli_connect_error();
+        }
+        $name = mysqli_real_escape_string($con, $_POST['name']);
+        $mac = mysqli_real_escape_string($con, $_POST['mac']);
+        $serviceorderid = mysqli_real_escape_string($con, $_POST['serviceorderid']);
+        $rsp = mysqli_real_escape_string($con, $_POST['rsp']);
+        $status = mysqli_real_escape_string($con, $_POST['status']);
+        $bwdown = mysqli_real_escape_string($con, $_POST['bwdown']);
+        $bwup = mysqli_real_escape_string($con, $_POST['bwup']);
+        $created = mysqli_real_escape_string($con, $_POST['created']);
+
+        $sql = "INSERT INTO request (rqmac, rqserviceorderid, rqrspid, rqstatus, rqbwdown, rqbwup, rqcreated, rqname) VALUES('$mac', '$serviceorderid', '$rsp', '$status', '$bwdown', '$bwup', '$created', '$name')"; 
+        if (!mysqli_query($con,$sql)) {
+            $saved = false;
+        }else{
+            $saved = true;
+        }
+
+        mysqli_close($con);
+    }else{
+        $saved = false; //Some field is not set
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -35,7 +66,7 @@
 <body>
 
 <div class="container">
-<?php if(isset($_GET['post'])){?>
+<?php if($saved){?>
           <div class="alert alert-success text-center" role="alert">
         <strong>Speed Test Request Saved!</strong>
       </div>
@@ -90,13 +121,16 @@
   <button type="submit" class="btn btn-default">Submit</button>
 </form>
 
-<?php if(isset($_GET['post'])){?>
-          <div class="alert alert-success text-center" role="alert">
+<?php if($saved){?>
+      <div class="alert alert-success text-center" role="alert">
         <strong>Speed Test Request Saved!</strong>
       </div>
 <?php }?>
-</div> <!-- /container -->
 
+
+      <iframe src="index.php<?php if(isset($mac)){ echo '?mac=00:0c:29:59:59:7b'; }?>" style="zoom:0.60" width="100%" height="350" frameborder="0"></iframe>
+
+</div> <!-- /container -->
 
 <!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
 <script src="bootstrap/js/ie10-viewport-bug-workaround.js"></script>

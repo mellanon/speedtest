@@ -19,8 +19,12 @@ var current_id = 0
 var last_id = 0
 var refresher = 0
 
+// global placeholder for term object
+var terminal = null;
+
 jQuery(function($) {
   $('html').terminal(function(cmd, term) {
+          terminal = term; //global reference
           clearInterval(refresher);
           term.pause();
           //$.jrpc is helper function which
@@ -61,6 +65,10 @@ jQuery(function($) {
           },5000);
           }, {
             greetings: "Listen to speed test results from the specified device",
+            onInit: function(terminal) {
+                window.terminal = terminal;
+                terminal.exec('1');
+            },
             prompt: "DeviceID> "});
        });
 </script>
