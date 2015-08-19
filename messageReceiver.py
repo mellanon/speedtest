@@ -17,8 +17,6 @@ import json
 import requests
 import pprint
 
-#TODO: Run speed test in simple mode by getting run mode from argsv (init-script parameter)
-#TODO: Method to sort the provided speed test server list based on distance from speed test device
 #TODO: Loop through speed test server list if test fail
 #TODO: Robustness if RabbitMQ fails?
 
@@ -190,13 +188,11 @@ def waitForPing( ip, **kwargs):
 def speedtest(request):
     #Add possibility to select which servers to execute speed test against
     #Add parameters to the python script to execute simple mode etc.
-    #TODO function to sort serverlist provided by configuration service
     #TODO loop through server list if one fails
     
     cmd = ['/usr/bin/python', '-u', '/opt/speedtest/speedtest_cli.py']
 
     try:
-        #TODO Validate result from getSpeedTestRequest
         srvList = request['request']['serverlist']
         rqId = request['request']['rqid']
         serviceOrderId = request['request']['serviceorderid']
@@ -210,13 +206,15 @@ def speedtest(request):
 
         logMsg = 'No Speed Test server related to the RSP of the service order. Selecting the closest one.'
 
-        if len(srvList) > 0 and not speedTestMiniEnabled:
-            #TODO sort list based on distance
+        if srvList != None and len(srvList) > 0 and not speedTestMiniEnabled:
             cmd = ['/usr/bin/python', '-u', '/opt/speedtest/speedtest_cli.py', '--server', srvList[0]]
             logMsg = 'Selecting Speed Test server ('+srvList[0]+') based on service order '+str(serviceOrderId)+' with bandwidth setting '+bwDown+'/'+bwUp+' Mb/s'
         elif speedTestMiniEnabled:
             cmd = ['/usr/bin/python', '-u', '/opt/speedtest/speedtest_cli.py', '--mini', speedTestMiniServer]
             logMsg = 'Selecting Speed Test Mini Server ('+speedTestMiniServer+') defined in config file.'
+        elif srvList == None and not speedTestMiniEnabled:
+            cmd = ['/usr/bin/python', '-u', '/opt/speedtest/speedtest_cli.py']
+            logMsg = 'Could not find a preferred Speed Test Server for the RSP related to service order ('+str(serviceOrderId)+'), selecting the closest one.'
 
         if speedTestSimple:
             cmd.append('--simple')

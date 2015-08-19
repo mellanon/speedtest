@@ -20,7 +20,8 @@ general:
     remote-timeout: 60 #seconds 
     request-config-timeout: 60 #seconds
     update-request-status-timeout: 60 #seconds
+    sleep-on-boot: 30
 speed-test:
-    mini-enabled: true
+    mini-enabled: false
     mini-server: 'http://192.168.56.222/mini/'
     simple-enabled: false

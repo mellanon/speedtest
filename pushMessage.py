@@ -7,6 +7,7 @@ from datetime import datetime
 import logging
 import logging.handlers
 import yaml
+import time
 
 with open('/opt/speedtest/config.yaml', 'r') as f:
     config = yaml.load(f)
@@ -16,6 +17,7 @@ with open('/opt/speedtest/config.yaml', 'r') as f:
 username = config["rabbit-mq"]["username"]
 password = config["rabbit-mq"]["password"]
 syslogQueue = config["rabbit-mq"]["syslog-queue"]
+sleepOnBoot = config["general"]["sleep-on-boot"]
 
 syslog = logging.getLogger('Syslog')
 syslog.setLevel(logging.DEBUG)
@@ -40,6 +42,7 @@ try:
         message = sys.stdin.readline().rstrip()
 
 	if len(message) > 1:
+            if "RUN SPEED TEST ON BOOT" in message: time.sleep(sleepOnBoot) #wait on boot to get performance
             credentials = pika.PlainCredentials(username, password)
 	    connection = pika.BlockingConnection(pika.ConnectionParameters(
                'localhost', 5672, '/', credentials))
@@ -49,7 +52,7 @@ try:
 
 	    channel.basic_publish(exchange='',
                       routing_key=syslogQueue,
-                      body=message)
+                      body="'"+message+"'")
 
 	    connection.close()
 except Exception, e:
